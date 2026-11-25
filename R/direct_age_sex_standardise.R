@@ -222,14 +222,12 @@ direct_age_sex_standardise <- function(
 
   dplyr::select(
     !!!var_syms,
-    total_observed,
-    total_population,
-    crude_rate,
-    dss_rate,
-    lower,
-    upper
-  )
+    Observed = total_observed,
+    Population = total_population,
+    CrudeRate = crude_rate,
+    AgeSexStandardisedRate = dss_rate,
+    LowerCI = lower,
+    UpperCI = upper)
 
-  return(out)
-}
+  return(out)}
 

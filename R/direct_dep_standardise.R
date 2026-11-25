@@ -124,13 +124,12 @@ direct_dep_standardise <- function(
 
     dplyr::select(
       !!!var_syms,
-      total_observed,
-      total_population,
-      crude_rate,
-      dds_rate,
-      lower,
-      upper
-    )
+      Observed = total_observed,
+      Population = total_population,
+      CrudeRate = crude_rate,
+      DeprivationStandardisedRate = dds_rate,
+      LowerCI = lower,
+      UpperCI = upper)
 
   return(out)
 }

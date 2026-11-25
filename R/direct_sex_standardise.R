@@ -1,213 +1,183 @@
-#' Direct Age Standardisation with Confidence Intervals
+#' Direct Sex Standardisation with Confidence Intervals
 #'
-#' Computes directly age-standardised rates with 95% confidence intervals
-#' using the 2013 European Standard Population and Byar's method.
+#' Computes directly sex-standardised rates using a 50:50 male/female
+#' reference population. Confidence intervals are calculated using
+#' Byar's approximation. Lower confidence interval limits below zero
+#' are reported as zero.
 #'
-#' @param data Dataframe with observed values and population.
-#' @param var One or more grouping variables (quoted or unquoted).
-#' @param ageband Column specifying age bands.
-#' @param observed Column with observed counts.
-#' @param population Column with denominator population.
-#' @param multiplier Scale for rates (default = 1,000).
+#' @param data Dataframe containing observed counts and population.
+#' @param var One or more grouping variable names supplied as a character
+#'   vector, e.g. c("Region", "FinancialYear").
+#' @param sex Column containing sex categories.
+#' @param observed Column containing observed counts.
+#' @param population Column containing denominator population.
+#' @param multiplier Scale for rates, default is 1,000.
+#' @param ref_population Reference population containing Sex and
+#'   StdPopulation columns. Defaults to `std_sex`.
 #'
-#' @return A tibble with directly standardised rates and 95% confidence
-#'   intervals.
+#' @return A tibble containing the grouping variables, sex-standardised
+#'   rate, and 95% confidence intervals.
 #'
 #' @examples
 #' example_data <- data.frame(
 #'   variable = c("A", "A", "B", "B"),
-#'   ageband = c("0-4", "5-9", "0-4", "5-9"),
+#'   sex = c("F", "M", "F", "M"),
 #'   observed = c(10, 20, 15, 25),
 #'   population = c(1000, 1200, 1100, 1300)
 #' )
 #'
-#' direct_age_standardise(
+#' direct_sex_standardise(
 #'   data = example_data,
 #'   var = "variable",
-#'   ageband = "ageband",
+#'   sex = "sex",
 #'   observed = "observed",
 #'   population = "population"
 #' )
 #'
 #' @export
 
-direct_age_standardise <- function(
+direct_sex_standardise <- function(
     data,
     var,
-    ageband,
+    sex,
     observed,
     population,
-    multiplier = 1000) {
+    multiplier = 1000,
+    ref_population = std_sex) {
 
   # ------------------------------------------------------------
-  # Helper to convert quoted or unquoted grouping variables
+  # Check grouping variables
   # ------------------------------------------------------------
 
-  sym_flex <- function(x) {
-    if (is.character(x)) {
-      rlang::syms(x)
-    } else {
-      rlang::syms(as.character(rlang::enexpr(x)))
-    }
-  }
-
-  var_syms <- sym_flex(var)
-
-  ageband_sym <- rlang::ensym(ageband)
-  observed_sym <- rlang::ensym(observed)
-  population_sym <- rlang::ensym(population)
+  if (!is.character(var)) {
+    stop("`var` must be a character vector of column names, e.g. ","c('PCN', 'FinancialYear').", call. = FALSE)}
 
   # ------------------------------------------------------------
-  # Calculate observed counts and population by age band
+  # Convert single-column arguments to symbols
+  # ------------------------------------------------------------
+
+  if (!is.character(sex) || length(sex) != 1) {
+    sex <- rlang::as_string(rlang::ensym(sex))}
+
+  if (!is.character(observed) || length(observed) != 1) {
+    observed <- rlang::as_string(rlang::ensym(observed))}
+
+  if (!is.character(population) || length(population) != 1) {
+    population <- rlang::as_string(rlang::ensym(population))}
+
+  # ------------------------------------------------------------
+  # Convert column names to symbols
+  # ------------------------------------------------------------
+
+  var_syms <- rlang::syms(var)
+  sex_sym <- rlang::sym(sex)
+  observed_sym <- rlang::sym(observed)
+  population_sym <- rlang::sym(population)
+
+  # ------------------------------------------------------------
+  # Check reference population
+  # ------------------------------------------------------------
+
+  if (!all(c("Sex", "StdPopulation") %in% names(ref_population))) {
+    stop("`ref_population` must contain columns named `Sex` and ","`StdPopulation`.", call. = FALSE)}
+
+  # ------------------------------------------------------------
+  # Standardisation
   # ------------------------------------------------------------
 
   out <- data %>%
-    dplyr::group_by(
-      !!!var_syms,
-      !!ageband_sym
-    ) %>%
+
+    # Aggregate observed and population by grouping variables and sex
+    dplyr::group_by(dplyr::across(!!!var_syms),!!sex_sym) %>%
+
     dplyr::summarise(
       obs = sum(!!observed_sym, na.rm = TRUE),
       pop = sum(!!population_sym, na.rm = TRUE),
-      .groups = "drop"
-    ) %>%
+      .groups = "drop") %>%
 
-    # ----------------------------------------------------------
-  # Ensure all reference age bands are present
-  # ----------------------------------------------------------
-
-  dplyr::right_join(
-    ref_population %>%
-      dplyr::select(AgeBand),
-    by = setNames(
-      "AgeBand",
-      rlang::as_string(ageband_sym)
-    )
-  ) %>%
-
+    # Calculate sex-specific crude rate
     dplyr::mutate(
-      obs = dplyr::coalesce(obs, 0),
-      pop = dplyr::coalesce(pop, 0)
+      rate = dplyr::if_else(
+        pop > 0,
+        obs / pop,
+        0
+      )
     ) %>%
 
-    # ----------------------------------------------------------
-  # Calculate age-specific rates
-  # ----------------------------------------------------------
+    # Add standard population weights
+    dplyr::left_join(
+      ref_population,
+      by = setNames("Sex", sex)
+    ) %>%
 
-  dplyr::mutate(
-    rate = dplyr::if_else(
-      pop > 0,
-      obs / pop,
-      0
-    )
-  ) %>%
+    # Calculate expected cases
+    dplyr::mutate(
+      expected = rate * StdPopulation
+    ) %>%
 
-    # ----------------------------------------------------------
-  # Join the 2013 European Standard Population
-  # ----------------------------------------------------------
+    # Aggregate across sex
+    dplyr::group_by(dplyr::across(!!!var_syms)) %>%
 
-  dplyr::left_join(
-    ref_population,
-    by = setNames(
-      "AgeBand",
-      rlang::as_string(ageband_sym)
-    )
-  ) %>%
-
-    # ----------------------------------------------------------
-  # Calculate expected events and variance components
-  # ----------------------------------------------------------
-
-  dplyr::mutate(
-    expected = rate * StdPopulation,
-
-    var_component = dplyr::if_else(
-      pop > 0,
-      (StdPopulation^2) * (obs / (pop^2)),
-      0
-    )
-  ) %>%
-
-    # ----------------------------------------------------------
-  # Aggregate to the requested grouping level
-  # ----------------------------------------------------------
-
-  dplyr::group_by(!!!var_syms) %>%
     dplyr::summarise(
-      total_observed = sum(obs, na.rm = TRUE),
-
-      total_population = sum(pop, na.rm = TRUE),
-
-      crude_rate = dplyr::if_else(
-        sum(pop, na.rm = TRUE) > 0,
-        sum(obs, na.rm = TRUE) / sum(pop, na.rm = TRUE),
-        0
-      ),
-
-      das_rate =
+      dss_rate =
         sum(expected, na.rm = TRUE) /
         sum(StdPopulation, na.rm = TRUE),
 
-      variance =
-        sum(var_component, na.rm = TRUE) /
-        (sum(StdPopulation, na.rm = TRUE)^2),
+      total_observed =
+        sum(obs, na.rm = TRUE),
+
+      total_population =
+        sum(pop, na.rm = TRUE),
+
+      crude_rate =
+        ifelse(
+          total_population > 0,
+          total_observed / total_population,
+          0
+        ),
 
       .groups = "drop"
     ) %>%
 
-    # ----------------------------------------------------------
-  # Byar 95% confidence intervals
-  # ----------------------------------------------------------
+    # Byar 95% confidence intervals
+    dplyr::mutate(
 
-  dplyr::mutate(
-    lower = ifelse(
-      total_observed == 0,
-      0,
-      das_rate *
+      lower = dplyr::if_else(
+        total_observed == 0,
+        0,
+        dss_rate *
+          (
+            1 -
+              (1 / (9 * total_observed)) -
+              (1.96 / (3 * sqrt(total_observed)))
+          )^3
+      ),
+
+      upper =
+        dss_rate *
         (
           1 -
-            (1 / (9 * total_observed)) -
-            (1.96 / (3 * sqrt(total_observed)))
-        )^3
-    ),
+            (1 / (9 * (total_observed + 1))) +
+            (1.96 / (3 * sqrt(total_observed + 1)))
+        )^3,
 
-    upper =
-      das_rate *
-      (
-        1 -
-          (1 / (9 * (total_observed + 1))) +
-          (1.96 / (3 * sqrt(total_observed + 1)))
-      )^3,
+      # Ensure lower CI cannot be negative
+      lower = pmax(lower, 0),
 
-    # Lower confidence limits cannot be negative
-    lower = pmax(0, lower),
+      # Apply rate multiplier and rounding
+      dss_rate = round(multiplier * dss_rate, 2),
+      lower = round(multiplier * lower, 2),
+      upper = round(multiplier * upper, 2)
+    ) %>%
 
-    # --------------------------------------------------------
-    # Apply multiplier and rounding
-    # --------------------------------------------------------
-
-    crude_rate = round(multiplier * crude_rate, 2),
-
-    dss_rate = round(multiplier * das_rate, 2),
-
-    lower = round(multiplier * lower, 2),
-
-    upper = round(multiplier * upper, 2)
-  ) %>%
-
-    # ----------------------------------------------------------
-  # Select output
-  # ----------------------------------------------------------
-
-  dplyr::select(
-    !!!var_syms,
-    total_observed,
-    total_population,
-    crude_rate,
-    dss_rate,
-    lower,
-    upper
-  )
+    dplyr::select(
+      dplyr::all_of(var),
+      Observed = total_observed,
+      Population = total_population,
+      CrudeRate = crude_rate,
+      SexStandardisedRate = dss_rate,
+      LowerCI = lower,
+      UpperCI = upper)
 
   return(out)
 }

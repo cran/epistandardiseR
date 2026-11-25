@@ -1,15 +1,11 @@
 Package: epistandardiseR
 Type: Package
-Title: Tools for Direct Standardisation with Confidence Intervals
-Version: 0.0.2
+Title: Direct Age, Sex and Deprivation Standardisation
+Version: 0.0.3
 Authors@R: 
     person("Joe Blackford", email = "joseph.blackford@outlook.com", role = c("aut", "cre"))
-Description: Provides tools to compute directly standardised rates 
-    using the 2013 European Standard Population for age and deprivation-standardised 
-    rates using a 10% per decile assumption. Sex standardisation uses an assumed equal proportion of both males and females. 
-    The package Includes variance estimation and 95% confidence intervals for population health applications. 
-    Functions support flexible grouping variables and age bands, enabling 
-    reproducible and automated analyses.
+Description: Allows computation of directly standardised rates using the 2013 European Standard Population, deprivation-standardised rates using a 10% per decile assumption, sex standardisation uses an assumed equal proportion of both males and females. 
+ Package allows multivariable standardisation using Age, Sex or Deprivation using the above methods. The package calculates 95% confidence intervals using Byar's approximation. Functions support flexible grouping variables and age bands, enabling reproducible results.
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
@@ -18,9 +14,11 @@ Depends: R (>= 3.5)
 URL: https://github.com/JoeBlackford/epistandardiseR
 BugReports: https://github.com/JoeBlackford/epistandardiseR/issues
 Config/roxygen2/version: 8.0.0
+Suggests: testthat (>= 3.0.0)
+Config/testthat/edition: 3
 NeedsCompilation: no
-Packaged: 2026-08-28 08:39:04 UTC; Joe.Blackford
+Packaged: 2026-11-24 11:24:30 UTC; Joe.Blackford
 Author: Joe Blackford [aut, cre]
 Maintainer: Joe Blackford <joseph.blackford@outlook.com>
 Repository: CRAN
-Date/Publication: 2026-09-09 14:40:16 UTC
+Date/Publication: 2026-11-25 11:10:02 UTC

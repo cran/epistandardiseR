@@ -21,6 +21,7 @@ utils::globalVariables(c(
   "total_observed",
   "crude_rate",
   "total_population",
+  "std_sex",
 
   # deprivation standardisation
   "std_dep_decile",

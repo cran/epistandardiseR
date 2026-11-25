@@ -113,13 +113,12 @@ direct_age_standardise <- function(data, var, ageband, observed, population, mul
 
     dplyr::select(
       !!!var_syms,
-      total_observed,
-      total_population,
-      crude_rate,
-      das_rate,
-      lower,
-      upper
-    )
+      Observed = total_observed,
+      Population = total_population,
+      CrudeRate = crude_rate,
+      AgeStandardisedRate = das_rate,
+      LowerCI = lower,
+      UpperCI = upper)
 
   return(out)
 }
